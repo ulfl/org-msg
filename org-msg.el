@@ -296,8 +296,9 @@ Example:
   :type '(symbol))
 
 (defcustom org-msg-supported-mua '((gnus-user-agent . "gnus")
-				   (message-user-agent . "gnus")
-				   (mu4e-user-agent . "mu4e"))
+				                           (message-user-agent . "gnus")
+				                           (mu4e-user-agent . "mu4e")
+				                           (notmuch-user-agent . "notmuch"))
   "Supported Mail User Agents."
   :type '(alist :value-type string))
 
@@ -305,9 +306,9 @@ Example:
   "Call the specific MUA function for SYM with ARG parameters."
   (let ((mua (assoc-default mail-user-agent org-msg-supported-mua)))
     (if mua
-	(let ((fun (intern (format "org-msg-%s-%s" sym mua))))
-	  (when (functionp fun)
-	    (apply fun arg)))
+	      (let ((fun (intern (format "org-msg-%s-%s" sym mua))))
+	        (when (functionp fun)
+	          (apply fun arg)))
       (error "Backend not found"))))
 
 (defun org-msg-mml-recursive-support ()
@@ -866,6 +867,10 @@ a html mime part, it returns t, nil otherwise."
   (with-current-buffer mu4e~view-buffer-name
     (when (mu4e-message-field-at-point :body-html) t)))
 
+(defun org-msg-article-htmlp-notmuch ()
+  "Return t if the current notmuch reply is an HTML article."
+  f)
+
 (defun org-msg-post-setup (&rest _args)
   "Transform the current `message' buffer into a OrgMsg buffer.
 If the current `message' buffer is a reply, the
@@ -1007,6 +1012,20 @@ d       Delete one attachment, you will be prompted for a file name."))
   (if org-msg-mode
       (add-hook 'mu4e-compose-mode-hook 'org-msg-post-setup)
     (remove-hook 'mu4e-compose-mode-hook 'org-msg-post-setup)))
+
+(defun org-msg-mode-notmuch ()
+  "Setup the hook for notmuch mail user agent."
+  (if org-msg-mode
+      (progn
+        (advice-add 'notmuch-mua-reply :after 'org-msg-post-setup)
+        (advice-add 'notmuch-mua-mail :after 'org-msg-post-setup--if-not-reply))
+    (progn
+      (advice-remove 'notmuch-mua-reply 'org-msg-post-setup)
+      (advice-remove 'notmuch-mua-mail 'org-msg-post-setup--if-not-reply))))
+
+(defun org-msg-post-setup--if-not-reply (&rest _args)
+  (unless (org-msg-message-fetch-field "subject")
+    (org-msg-post-setup _args)))
 
 (define-minor-mode org-msg-mode
   "Toggle OrgMsg mode.
